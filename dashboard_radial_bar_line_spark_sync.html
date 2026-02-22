@@ -1,0 +1,276 @@
+
+<!DOCTYPE html>
+<html lang='tr'>
+<head>
+<meta charset='utf-8'/>
+<meta name='viewport' content='width=device-width, initial-scale=1'/>
+<title>Özel Eğitim — Senkron Dairesel + Bar + Line + Sparkline (Tam Animasyon)</title>
+<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap' rel='stylesheet'>
+<script src='https://cdn.jsdelivr.net/npm/d3@7'></script>
+<style>
+  :root{--bg:#0d1117;--fg:#e6edf3;--muted:#9fb3c8;--card:rgba(255,255,255,.06);--bd:rgba(255,255,255,.12);--accent:#58a6ff;--accent2:#9ec1ff;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1100px 700px at 18% -10%, #0b1220 0%, #0d1117 55%, #111827 100%);color:var(--fg);font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  header{padding:20px 16px 6px;text-align:center}
+  h1{margin:0;font-size:22px;font-weight:800;color:#7aa7ff}
+  .sub{margin:6px 0 0;color:var(--muted)}
+  main{max-width:1400px;margin:0 auto;padding:12px 16px 24px}
+  .panel{background:var(--card);border:1px solid var(--bd);border-radius:14px;backdrop-filter:blur(8px)}
+  .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin:10px 0}
+  select,button,input[type='range']{accent-color:var(--accent)}
+  select,button{background:#161b22;border:1px solid #30363d;color:var(--fg);padding:8px 10px;border-radius:10px}
+  button{cursor:pointer}
+  button.primary{background:linear-gradient(180deg,#1f6feb,#1158c7);border:none;box-shadow:0 6px 18px rgba(17,88,199,.3)}
+  .chip{padding:6px 10px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);border-radius:999px;font-weight:600;color:#9ec1ff;font-size:12px}
+  #left{padding:10px}
+  #right{padding:10px;display:grid;grid-template-rows: 300px 300px 120px; gap:14px}
+  .vizbox{position:relative;border:1px solid var(--bd);border-radius:12px;padding:6px}
+  .title{position:absolute;left:10px;top:6px;color:var(--muted);font-size:12px}
+  svg{width:100%;height:100%}
+  .tip{position:absolute;pointer-events:none;background:rgba(0,0,0,.85);color:#fff;padding:8px 10px;border-radius:8px;font-size:12px;opacity:0}
+  .legend{position:absolute;right:10px;top:6px;color:var(--muted);font-size:12px}
+  @keyframes pulse { 0%{transform:scale(1);} 50%{transform:scale(1.06);} 100%{transform:scale(1);} }
+  .centerPulse { animation: pulse 2.6s ease-in-out infinite; transform-origin:center; }
+  @media(max-width:1100px){ .grid{grid-template-columns:1fr} #right{grid-template-rows: 260px 260px 120px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Özel Eğitim — Senkron Dairesel + Bar + Line + Sparkline</h1>
+  <div class='sub'>Dairesel ağ akarken **yatay barlar ve çizgiler de hareket eder**. Tür seçin, ▶ Oynat ile yılları akıtın; tüm infografikler animasyonla senkron güncellenir.</div>
+</header>
+<main class='panel'>
+  <div class='controls'>
+    <span class='chip' id='chipTur'></span>
+    <label>Tür: <select id='selTur'></select></label>
+    <button class='primary' id='btnPlay'>▶ Oynat</button>
+    <button id='btnPrev'>⟨</button>
+    <button id='btnNext'>⟩</button>
+    <label>Hız: <input type='range' id='spd' min='0.25' max='3' step='0.25' value='1'> <span id='spdVal'>1x</span></label>
+    <label><input type='checkbox' id='loop' checked> Döngü</label>
+    <label><input type='checkbox' id='showTrend' checked> Trend bağlantıları</label>
+  </div>
+  <div class='grid'>
+    <section id='left' class='vizbox'>
+      <div class='title'>Dairesel Kavram Ağı</div>
+      <svg id='radial'></svg>
+      <div id='tooltip' class='tip'></div>
+    </section>
+    <section id='right'>
+      <div class='vizbox'>
+        <div class='title'>Yıllık Trend (Line)</div>
+        <svg id='line'></svg>
+      </div>
+      <div class='vizbox'>
+        <div class='title'>Yıllar (Yatay Bar)</div>
+        <svg id='bar'></svg>
+      </div>
+      <div class='vizbox'>
+        <div class='title'>Sparkline</div>
+        <svg id='spark'></svg>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const PAY = {"types": ["Özel Eğitim Anaokulu", "Rehberlik Araştırma Merkezi", "İlköğretim Okulu (Görme Engelliler)", "Özel Eğitim Meslek Okulu (Görme Engelliler)", "İlköğretim Okulu (İşitme Engelliler)", "Özel Eğitim Meslek Lisesi(İşitme Engelliler)", "İlköğretim Okulu (Bedensel Engelliler)", "Özel Eğitim Meslek Lisesi(Bedensel Engelliler)", "İlköğretim Okulu (Hafif Düzey Zihinsel Engelliler)", "Özel Eğitim Meslek Okulu (Zihinsel Engelliler)", "Özel Eğitim Uygulama Okulu (l-ll. Kademe)", "Özel Eğitim Uygulama Okulu ( III. Kademe)"], "data": {"Özel Eğitim Anaokulu": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 6.0, 10.0, 16.0, 22.0, 28.0, 38.0, 43.0, 67.0, 112.0, 137.0, 334.0, 360.0, 308.0, 272.0, 272.0]}, "Rehberlik Araştırma Merkezi": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [0.0, 128.0, 140.0, 160.0, 176.0, 190.0, 198.0, 204.0, 211.0, 214.0, 219.0, 224.0, 228.0, 228.0, 233.0, 238.0, 238.0, 246.0, 254.0, 274.0, 292.0, 297.0, 300.0, 300.0, 301.0]}, "İlköğretim Okulu (Görme Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [9.0, 15.0, 15.0, 16.0, 16.0, 16.0, 16.0, 15.0, 16.0, 16.0, 32.0, 32.0, 32.0, 34.0, 34.0, 34.0, 34.0, 36.0, 36.0, 37.0, 36.0, 36.0, 36.0, 35.0, 35.0]}, "Özel Eğitim Meslek Okulu (Görme Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]}, "İlköğretim Okulu (İşitme Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [32.0, 46.0, 50.0, 49.0, 49.0, 48.0, 48.0, 49.0, 49.0, 48.0, 90.0, 88.0, 90.0, 88.0, 85.0, 73.0, 66.0, 64.0, 62.0, 65.0, 64.0, 64.0, 62.0, 62.0, 62.0]}, "Özel Eğitim Meslek Lisesi(İşitme Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [8.0, 13.0, 14.0, 14.0, 15.0, 15.0, 16.0, 17.0, 19.0, 20.0, 19.0, 18.0, 19.0, 21.0, 21.0, 21.0, 20.0, 20.0, 20.0, 20.0, 20.0, 21.0, 22.0, 20.0, 20.0]}, "İlköğretim Okulu (Bedensel Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [2.0, 4.0, 4.0, 4.0, 5.0, 4.0, 3.0, 3.0, 3.0, 3.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]}, "Özel Eğitim Meslek Lisesi(Bedensel Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [0.0, 3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]}, "İlköğretim Okulu (Hafif Düzey Zihinsel Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [11.0, 37.0, 40.0, 44.0, 49.0, 50.0, 50.0, 55.0, 53.0, 51.0, 104.0, 99.0, 97.0, 92.0, 79.0, 76.0, 72.0, 73.0, 72.0, 71.0, 68.0, 68.0, 64.0, 65.0, 65.0]}, "Özel Eğitim Meslek Okulu (Zihinsel Engelliler)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [0.0, 14.0, 16.0, 16.0, 16.0, 16.0, 19.0, 21.0, 27.0, 38.0, 96.0, 111.0, 122.0, 130.0, 138.0, 148.0, 146.0, 166.0, 182.0, 189.0, 190.0, 188.0, 191.0, 197.0, 197.0]}, "Özel Eğitim Uygulama Okulu (l-ll. Kademe)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [10.0, 104.0, 111.0, 123.0, 133.0, 143.0, 150.0, 161.0, 180.0, 194.0, 424.0, 477.0, 502.0, 520.0, 546.0, 616.0, 630.0, 666.0, 696.0, 721.0, 768.0, 804.0, 859.0, 895.0, 893.0]}, "Özel Eğitim Uygulama Okulu ( III. Kademe)": {"years": [1992, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "values": [0.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 5.0, 6.0, 7.0, 166.0, 193.0, 206.0, 214.0, 228.0, 258.0, 267.0, 278.0, 287.0, 294.0, 304.0, 319.0, 334.0, 346.0, 346.0]}}};
+
+// Elements
+const selTur = document.getElementById('selTur');
+const chipTur = document.getElementById('chipTur');
+const btnPlay = document.getElementById('btnPlay');
+const btnPrev = document.getElementById('btnPrev');
+const btnNext = document.getElementById('btnNext');
+const spd = document.getElementById('spd');
+const spdVal = document.getElementById('spdVal');
+const loop = document.getElementById('loop');
+const showTrend = document.getElementById('showTrend');
+
+// Populate types
+PAY.types.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; selTur.appendChild(o); });
+if (PAY.types.length) selTur.value = PAY.types[0];
+spd.addEventListener('input', ()=> spdVal.textContent = spd.value+'x'); spd.dispatchEvent(new Event('input'));
+
+// D3 roots
+const svgR = d3.select('#radial');
+const svgL = d3.select('#line');
+const svgB = d3.select('#bar');
+const svgS = d3.select('#spark');
+const tip = d3.select('#tooltip');
+
+// ViewBoxes
+function size(){
+  const lw = document.getElementById('left').clientWidth;
+  const lh = document.getElementById('left').clientHeight - 12;
+  svgR.attr('viewBox', [-lw/2, -lh/2, lw, lh]);
+  svgL.attr('viewBox', [0,0, lw, 300]);
+  svgB.attr('viewBox', [0,0, lw, 300]);
+  svgS.attr('viewBox', [0,0, lw, 110]);
+}
+size(); window.addEventListener('resize', size);
+
+// State
+let idx = 0; let playing=false; let timer=null;
+
+function fmtInt(x){ return d3.format(',')(Math.round(x)).replace(/,/g,'.'); }
+
+function render(){
+  const tur = selTur.value; const obj = PAY.data[tur];
+  const years = obj.years.slice(); const values = obj.values.slice();
+  const colorType = '#58a6ff';
+  chipTur.textContent = tur; chipTur.style.borderColor=colorType; chipTur.style.color=colorType; chipTur.style.background='rgba(88,166,255,.12)';
+
+  // ====== RADIAL ======
+  svgR.selectAll('*').remove();
+  const bbox = svgR.node().viewBox.baseVal; const W=bbox.width, H=bbox.height; const cx=0, cy=0; const R1=Math.min(W,H)*0.33; const R2=Math.min(W,H)*0.41;
+  const vmin = d3.min(values), vmax=d3.max(values);
+  const color = d3.scaleSequential(d3.interpolateYlGnBu).domain([vmin, vmax]);
+  const rScale=d3.scaleSqrt().domain([vmin,vmax]).range([8,26]);
+  const sw=d3.scaleLinear().domain([vmin,vmax]).range([1.5,9]);
+
+  const nodes=[{id:'TYPE', type:'tur', label:tur, fx:cx, fy:cy}];
+  years.forEach((y,i)=>{ const a=(i/years.length)*2*Math.PI - Math.PI/2; const ring=i%2?R2:R1; const x=cx+ring*Math.cos(a), yPos=cy+ring*Math.sin(a); nodes.push({id:'Y'+y, type:'year', year:y, value:values[i], fx:x, fy:yPos, a:a}); });
+  const linksStar = years.map((y,i)=>({source:'TYPE', target:'Y'+y, value:values[i], kind:'mag'}));
+  const linksTrend = years.slice(0,-1).map((y,i)=>({source:'Y'+years[i], target:'Y'+years[i+1], value:(values[i+1]+values[i])/2, kind:'trend'}));
+
+  function curvePath(sx,sy,tx,ty,bulge=0.12){ const mx=(sx+tx)/2, my=(sy+ty)/2; const dx=tx-sx, dy=ty-sy; const nx=-dy, ny=dx; const len=Math.hypot(dx,dy)||1; const k=len*bulge; const cx=mx+(nx/len)*k, cy=my+(ny/len)*k; return `M ${sx},${sy} Q ${cx},${cy} ${tx},${ty}`; }
+
+  const linkSel = svgR.append('g').selectAll('path.link').data([...linksStar, ...linksTrend]).join('path')
+    .attr('class', d=>'link '+d.kind).attr('fill','none')
+    .attr('stroke', d=> d.kind==='trend'? d3.color(colorType).copy({opacity:.18}) : d3.color('#93c5fd'))
+    .attr('stroke-width', d=> d.kind==='trend'? 2 : sw(d.value))
+    .attr('stroke-linecap','round').attr('stroke-linejoin','round')
+    .attr('d', d=>{ const s=nodes.find(n=>n.id===d.source), t=nodes.find(n=>n.id===d.target); return curvePath(s.fx,s.fy,t.fx,t.fy, d.kind==='trend'?0.05:0.14); });
+
+  const nodeG = svgR.append('g').selectAll('g.node').data(nodes).join('g').attr('class','node')
+    .attr('id', d=> d.type==='year'? 'nodeY'+d.year : 'nodeTYPE')
+    .attr('transform', d=>`translate(${d.fx},${d.fy})`);
+
+  nodeG.append('circle')
+    .attr('r', d=> d.type==='tur'? 30 : rScale(d.value))
+    .attr('fill', d=> d.type==='tur'? colorType : color(d.value))
+    .attr('stroke', d=> d.type==='tur'? d3.color(colorType).darker(0.7) : d3.color(color(d.value)).darker(0.8))
+    .attr('stroke-width',1.2)
+    .classed('centerPulse', d=> d.type==='tur')
+    .on('click', (ev,d)=>{ if(d.type==='year'){ const i=years.indexOf(d.year); setActive(i); } })
+    .on('mousemove', (ev,d)=>{
+      const html = d.type==='tur' ? `<div style='font-weight:700;margin-bottom:4px;'>${tur}</div>`+`Tüm paneller senkronize.` : `<div style='font-weight:700;margin-bottom:4px;'>${d.year}</div>`+`Değer: <b>${fmtInt(d.value)}</b>`;
+      tip.html(html).style('left', (ev.offsetX+18)+'px').style('top',(ev.offsetY+18)+'px').style('opacity',1);
+    })
+    .on('mouseleave', ()=> tip.style('opacity',0));
+
+  nodeG.append('text').attr('text-anchor','middle')
+    .attr('dy', d=> d.type==='tur'? '0.35em' : '3.2em')
+    .attr('font-size', d=> d.type==='tur'? 13 : 11)
+    .attr('font-weight', d=> d.type==='tur'? 800 : 600)
+    .attr('fill', d=> d.type==='tur'? '#0b1220' : '#cfd8e3')
+    .text(d=> d.type==='tur'? d.label : d.year);
+
+  nodeG.filter(d=> d.type==='year').append('text').attr('text-anchor','middle').attr('dy','4.9em')
+    .attr('font-size',10).attr('fill','#9fb3c8').text(d=> fmtInt(d.value));
+
+  // ====== LINE ======
+  svgL.selectAll('*').remove();
+  const vbL = svgL.node().viewBox.baseVal; const LW=vbL.width, LH=vbL.height; const lx=d3.scaleLinear().domain([d3.min(years), d3.max(years)]).range([40, LW-20]);
+  const ly=d3.scaleLinear().domain([d3.min(values), d3.max(values)]).nice().range([LH-24, 18]);
+  const L = d3.line().x((y,i)=> lx(years[i])).y(v=> ly(v)).curve(d3.curveMonotoneX);
+  svgL.append('path').datum(values).attr('fill','none').attr('stroke', '#9ec1ff').attr('stroke-width',2)
+    .attr('d', L).attr('stroke-dasharray','2000').attr('stroke-dashoffset',2000)
+    .transition().duration(1200).attr('stroke-dashoffset',0);
+  const lMarker = svgL.append('circle').attr('r',4.2).attr('fill','#9ec1ff').attr('stroke','#0b1220').attr('stroke-width',1.2);
+  svgL.selectAll('circle.dot').data(values).join('circle').attr('class','dot').attr('r',3.2)
+    .attr('cx',(d,i)=>lx(years[i])).attr('cy',d=>ly(d)).attr('fill','#9ec1ff')
+    .on('click',(ev,d)=>{ const i=values.indexOf(d); setActive(i); });
+
+  // ====== BAR ======
+  svgB.selectAll('*').remove(); const vbB=svgB.node().viewBox.baseVal; const BW=vbB.width, BH=vbB.height;
+  const bx=d3.scaleLinear().domain([0,d3.max(values)]).range([0, BW-200]);
+  const by=d3.scaleBand().domain(years).range([26, BH-16]).padding(0.18);
+  const barsG = svgB.append('g');
+  const bars = barsG.selectAll('rect').data(years).join('rect')
+    .attr('id', y=> 'bar'+y).attr('x', 140).attr('y', y=>by(y)).attr('height', by.bandwidth()).attr('fill', '#58a6ff')
+    .attr('width', 0)
+    .on('click', (ev,y)=>{ const i=years.indexOf(y); setActive(i); })
+    .transition().duration(800).attr('width', y=> bx(values[years.indexOf(y)]));
+
+  svgB.append('g').selectAll('text').data(years).join('text')
+    .attr('x',130).attr('y', y=> by(y)+by.bandwidth()/2).attr('fill','#9fb3c8').attr('text-anchor','end').attr('dominant-baseline','middle').text(y=>y);
+  const valLbl = svgB.append('g').selectAll('text.val').data(years).join('text').attr('class','val')
+    .attr('x', y=> 140 + bx(values[years.indexOf(y)]) + 8).attr('y', y=> by(y)+by.bandwidth()/2)
+    .attr('fill','#e6edf3').attr('dominant-baseline','middle').text(y=> fmtInt(values[years.indexOf(y)]));
+
+  // bar end marker for active year
+  const barMarker = svgB.append('circle').attr('r',5).attr('fill','#ffffff').attr('stroke','#0b1220').attr('stroke-width',1.4).attr('opacity',0.95);
+
+  // ====== SPARK ======
+  svgS.selectAll('*').remove(); const vbS=svgS.node().viewBox.baseVal; const SW=vbS.width, SH=vbS.height;
+  const sx=d3.scaleLinear().domain([0, years.length-1]).range([30, SW-20]);
+  const sy=d3.scaleLinear().domain([d3.min(values), d3.max(values)]).range([SH-18, 12]);
+  const sLine=d3.line().x((v,i)=> sx(i)).y(v=> sy(v)).curve(d3.curveMonotoneX);
+  svgS.append('path').datum(values).attr('fill','none').attr('stroke','#f0f6ff').attr('stroke-width',2)
+    .attr('d', sLine).attr('stroke-dasharray','2000').attr('stroke-dashoffset',2000)
+    .transition().duration(1200).attr('stroke-dashoffset',0);
+  const sMarker = svgS.append('circle').attr('r',3.6).attr('fill','#f0f6ff').attr('stroke','#0b1220').attr('stroke-width',1);
+
+  // ====== ACTIVE YEAR HIGHLIGHT + REACTIONS ======
+  function setActive(i){
+    idx = Math.max(0, Math.min(years.length-1, i));
+    const year = years[idx]; const val = values[idx];
+
+    // Radial highlight (pulse-like)
+    svgR.selectAll('g.node circle').transition().duration(320)
+      .attr('opacity', d=> d.type==='tur'? 1 : (d.year===year? 1 : .5))
+      .attr('r', d=> d.type==='tur'? 30 : (d.year===year? rScale(d.value)+4 : rScale(d.value)));
+
+    svgR.selectAll('path.link').transition().duration(320)
+      .attr('opacity', d=>{
+        if (d.kind==='mag') return d.target==='Y'+year? 1 : .35;
+        if (!showTrend.checked) return 0.1;
+        const iEnd = years.indexOf(parseInt(d.target.slice(1)));
+        const iStart = years.indexOf(parseInt(d.source.slice(1)));
+        return (iEnd===idx || iStart===idx-1)? 0.95 : 0.18;
+      })
+      .attr('stroke-width', d=> d.kind==='mag' && d.target==='Y'+year? Math.max(4, sw(val)) : (d.kind==='trend'? 3 : sw(d.value)));
+
+    // Line marker move
+    lMarker.transition().duration(360).ease(d3.easeCubicOut)
+      .attr('cx', lx(year)).attr('cy', ly(val));
+
+    // Spark marker move
+    sMarker.transition().duration(360).ease(d3.easeCubicOut)
+      .attr('cx', sx(idx)).attr('cy', sy(val));
+
+    // Bar reactions: highlight + mini width pulse + marker
+    svgB.selectAll('rect').attr('fill', y=> y===year? '#7aa7ff' : '#58a6ff').attr('opacity', y=> y===year? 1 : 0.85);
+
+    const targetW = bx(val);
+    const activeBar = svgB.select('#bar'+year);
+    // Mini width pulse (backOut)
+    activeBar.transition().duration(200).attr('width', Math.max(0, targetW*0.92))
+      .transition().duration(360).ease(d3.easeBackOut).attr('width', targetW);
+
+    // Move end marker to bar tip
+    barMarker.transition().duration(360).ease(d3.easeCubicOut)
+      .attr('cx', 140 + targetW).attr('cy', by(year) + by.bandwidth()/2);
+  }
+
+  // Controls
+  function play(){ if(playing) return; playing=true; btnPlay.textContent='⏸ Duraklat';
+    const base=900; function tick(){ setActive(idx); idx++; if(idx>=years.length){ if(loop.checked){ idx=0; } else { pause(); return; } } timer=setTimeout(tick, base/parseFloat(spd.value)); } tick(); }
+  function pause(){ playing=false; btnPlay.textContent='▶ Oynat'; if(timer){ clearTimeout(timer); timer=null; } }
+  btnPlay.onclick = ()=> playing? pause(): play();
+  btnPrev.onclick = ()=>{ pause(); setActive(idx-1); };
+  btnNext.onclick = ()=>{ pause(); setActive(idx+1); };
+  showTrend.onchange = ()=> setActive(idx);
+
+  // Init
+  idx=0; setActive(0);
+}
+
+selTur.addEventListener('change', render);
+render();
+</script>
+</body>
+</html>

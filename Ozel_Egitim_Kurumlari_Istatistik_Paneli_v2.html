@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang='tr'>
+<head>
+<meta charset='utf-8'/>
+<meta name='viewport' content='width=device-width, initial-scale=1'/>
+<title>Özel Eğitim Kurumları İstatistik Paneli</title>
+<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap' rel='stylesheet'>
+<script src='https://cdn.jsdelivr.net/npm/d3@7'></script>
+<style>
+:root,body.dark{
+  --bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:rgba(255,255,255,.05);
+  --bd:rgba(255,255,255,.08);--accent:#58a6ff;--accent2:#9ec1ff;
+  --green:#3fb950;--red:#f85149;--surface:#161b22;
+  --grid:rgba(255,255,255,.06);--axis:rgba(255,255,255,.15);
+  --dropdown-bg:#1c2129;--dropdown-bd:#30363d;
+  --tip-bg:rgba(13,17,23,.94);--tip-bd:rgba(255,255,255,.12);
+  --zero-cell:rgba(255,255,255,.02);
+  --kpi-card-bg:rgba(255,255,255,.04);
+  --input-bg:#161b22;--input-bd:#30363d;
+}
+body.light{
+  --bg:#f0f2f5;--fg:#111318;--muted:#3d444d;--card:rgba(255,255,255,.85);
+  --bd:rgba(0,0,0,.14);--accent:#0550ae;--accent2:#033d8b;
+  --green:#116329;--red:#a40e26;--surface:#ffffff;
+  --grid:rgba(0,0,0,.1);--axis:rgba(0,0,0,.3);
+  --dropdown-bg:#ffffff;--dropdown-bd:#bcc3cd;
+  --tip-bg:rgba(255,255,255,.97);--tip-bd:rgba(0,0,0,.18);
+  --zero-cell:rgba(0,0,0,.04);
+  --kpi-card-bg:rgba(255,255,255,.7);
+  --input-bg:#ffffff;--input-bd:#bcc3cd;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,-apple-system,sans-serif;min-height:100vh;transition:background .3s,color .3s}
+body.light select option{background:#fff;color:#1f2328}
+
+header{padding:20px 24px 4px;text-align:center}
+h1{font-size:21px;font-weight:800;letter-spacing:-.3px}
+.sub{color:var(--muted);margin-top:4px;font-size:13px}
+
+main{max-width:1480px;margin:0 auto;padding:10px 18px 32px}
+
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:14px;backdrop-filter:blur(8px)}
+
+/* CONTROLS */
+.controls-panel{padding:12px 20px;margin-bottom:12px;position:relative;z-index:40;overflow:visible}
+.controls-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
+/* Group 1: Tür Filtresi */
+.ctrl-group{display:flex;align-items:center;gap:10px}
+.ctrl-group select{
+  background:var(--input-bg);border:1px solid var(--input-bd);color:var(--fg);
+  padding:8px 14px;border-radius:10px;font-size:13px;font-family:inherit;
+  min-width:240px;max-width:400px;cursor:pointer;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;
+}
+.ctrl-group select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(88,166,255,.2)}
+.help-text{color:var(--muted);font-size:11px;white-space:nowrap}
+
+/* Separator between groups */
+.ctrl-sep{width:1px;height:28px;background:var(--bd);flex-shrink:0}
+
+/* Group 2: Yıl Navigasyonu */
+.year-nav{display:flex;align-items:center;gap:6px}
+.year-badge{
+  background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);
+  border-radius:8px;padding:5px 14px;font-size:14px;font-weight:700;color:var(--accent2);
+  letter-spacing:.3px;min-width:52px;text-align:center;
+}
+.year-nav button{
+  background:var(--input-bg);border:1px solid var(--input-bd);color:var(--muted);
+  padding:6px 10px;border-radius:8px;font-size:11px;font-family:inherit;cursor:pointer;
+  display:flex;align-items:center;gap:4px;white-space:nowrap;transition:all .15s;
+}
+.year-nav button:hover{border-color:var(--accent);color:var(--fg)}
+
+/* Group 3: Ayarlar Butonları — pushed to the right */
+.ctrl-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+
+.btn-toggle{
+  background:var(--input-bg);border:1px solid var(--input-bd);color:var(--muted);
+  padding:7px 13px;border-radius:10px;cursor:pointer;font-size:12px;font-family:inherit;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;transition:all .2s;
+}
+.btn-toggle:hover,.btn-toggle.active{border-color:var(--accent);color:var(--fg) !important}
+.btn-toggle .icon{font-size:14px}
+
+/* POPUP PICKER (shared between palette & animation) */
+.popup-picker{position:relative;z-index:50}
+.popup-btn{
+  background:var(--input-bg);border:1px solid var(--input-bd);color:var(--muted);
+  padding:7px 13px;border-radius:10px;cursor:pointer;font-size:12px;font-family:inherit;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;transition:all .2s;
+}
+.popup-btn:hover,.popup-btn.active{border-color:var(--accent);color:var(--fg) !important}
+.popup-btn .icon{font-size:14px}
+.popup-drop{
+  display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:100;
+  background:var(--dropdown-bg);border:1px solid var(--dropdown-bd);border-radius:12px;padding:10px;
+  box-shadow:0 12px 32px rgba(0,0,0,.4);
+}
+.popup-drop.open{display:block}
+
+/* Palette dropdown */
+.palette-preview{display:flex;gap:2px}
+.palette-preview span{width:12px;height:12px;border-radius:3px;display:block}
+.palette-drop{min-width:220px}
+.palette-option{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;
+  transition:background .15s;
+}
+.palette-option:hover{background:rgba(128,128,128,.1)}
+.palette-option.active{background:rgba(88,166,255,.12)}
+.palette-option .pal-swatches{display:flex;gap:2px}
+.palette-option .pal-swatches span{width:16px;height:16px;border-radius:3px;display:block}
+.palette-option .pal-name{font-size:12px;color:var(--fg)}
+
+/* Animation popup */
+.anim-drop{min-width:280px;padding:14px 16px}
+.anim-drop .anim-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.anim-drop .anim-row+.anim-row{margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.anim-drop button{
+  background:var(--input-bg);border:1px solid var(--input-bd);color:var(--fg);
+  padding:7px 12px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;
+}
+.anim-drop button.primary{
+  background:linear-gradient(180deg,#1f6feb,#1158c7);border:none;color:#fff;
+  box-shadow:0 4px 12px rgba(17,88,199,.25);font-weight:600;
+}
+.anim-drop label{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:5px;white-space:nowrap;cursor:pointer}
+.anim-drop .loop-label input{cursor:pointer}
+.speed-label{color:var(--muted);font-size:12px;white-space:nowrap}
+.speed-btns{display:flex;gap:4px}
+.speed-btns button{
+  background:var(--input-bg);border:1px solid var(--input-bd);color:var(--muted);
+  padding:5px 10px;border-radius:6px;font-size:11px;font-family:inherit;cursor:pointer;
+  transition:all .15s;min-width:36px;
+}
+.speed-btns button:hover{border-color:var(--accent);color:var(--fg)}
+.speed-btns button.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+/* DASHBOARD GRID */
+.dashboard-grid{display:grid;grid-template-columns:1fr 1.4fr;grid-template-rows:auto auto;gap:12px}
+.cell{padding:16px;position:relative;overflow:hidden}
+.cell-title{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.8px}
+.cell svg{width:100%;height:100%;display:block}
+
+#cellKPI{min-height:280px}
+#kpiContainer{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi-card{background:var(--kpi-card-bg);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}
+.kpi-label{font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.kpi-value{font-size:26px;font-weight:800;line-height:1.1}
+.kpi-sub{font-size:12px;margin-top:4px;color:var(--muted)}
+.kpi-up{color:var(--green)}
+.kpi-down{color:var(--red)}
+.kpi-flat{color:var(--muted)}
+
+#cellLine{min-height:320px}
+#lineChart{height:calc(100% - 28px)}
+#cellBar{min-height:440px}
+#barChart{height:calc(100% - 28px)}
+#cellHeatmap{min-height:440px}
+#heatmapChart{height:calc(100% - 28px)}
+
+.tip{
+  position:absolute;pointer-events:none;background:var(--tip-bg);color:var(--fg);
+  padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.5;
+  border:1px solid var(--tip-bd);opacity:0;transition:opacity .12s;
+  z-index:20;white-space:nowrap;
+}
+
+@media(max-width:1100px){
+  .dashboard-grid{grid-template-columns:1fr}
+  .ctrl-group select{min-width:180px}
+  #cellBar,#cellHeatmap{min-height:360px}
+}
+@media(max-width:768px){
+  .controls-bar{gap:10px}
+  .ctrl-sep{display:none}
+  .ctrl-actions{margin-left:0;flex-wrap:wrap}
+}
+@media(max-width:600px){
+  main{padding:8px 10px 24px}
+  .controls-panel{padding:10px 12px}
+  h1{font-size:17px}
+  .kpi-value{font-size:20px}
+  #kpiContainer{grid-template-columns:1fr}
+  .ctrl-group select{min-width:160px;max-width:100%}
+  .year-nav button span{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Özel Eğitim Kurumları İstatistikleri</h1>
+  <p class='sub'>Türkiye genelinde özel eğitim kurumlarının yıllara bağlı sayısal değişimini gösteren etkileşimli gösterge paneli</p>
+</header>
+
+<main>
+  <div class='controls-panel panel'>
+    <div class='controls-bar'>
+      <!-- Grup 1: Tür Filtresi -->
+      <div class='ctrl-group'>
+        <select id='selTur' aria-label='Kurum türü seçin'></select>
+        <span class='help-text'>Eğitim kurumu türü seçin</span>
+      </div>
+
+      <div class='ctrl-sep'></div>
+
+      <!-- Grup 2: Yıl Navigasyonu -->
+      <div class='year-nav'>
+        <button id='btnPrev' title='Önceki yıl'>◂ Önceki</button>
+        <span class='year-badge' id='yearBadge'>1992</span>
+        <button id='btnNext' title='Sonraki yıl'>Sonraki ▸</button>
+      </div>
+
+      <div class='ctrl-sep'></div>
+
+      <!-- Grup 3: Ayarlar -->
+      <div class='ctrl-actions'>
+        <button class='btn-toggle' id='btnTheme' title='Tema değiştir'>
+          Görüş Modu <span id='themeIcon'>☀</span>
+        </button>
+        <div class='popup-picker' id='palettePicker'>
+          <button class='popup-btn' id='btnPalette'>
+            Renk Paleti
+            <span class='palette-preview' id='palPreview'></span>
+          </button>
+          <div class='popup-drop palette-drop' id='palDropdown'></div>
+        </div>
+        <div class='popup-picker' id='animPicker'>
+          <button class='popup-btn' id='btnToggleAnim'>
+            <span class='icon'>⚙</span> Animasyon
+          </button>
+          <div class='popup-drop anim-drop' id='animPanel'>
+            <div class='anim-row'>
+              <button class='primary' id='btnPlay'>▶ Oynat</button>
+              <label class='loop-label'><input type='checkbox' id='loop' checked> Sürekli oynat</label>
+            </div>
+            <div class='anim-row'>
+              <span class='speed-label'>Hız:</span>
+              <div class='speed-btns' id='speedBtns'>
+                <button data-speed='0.5'>0.5x</button>
+                <button data-speed='1' class='active'>1x</button>
+                <button data-speed='2'>2x</button>
+                <button data-speed='3'>3x</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class='dashboard-grid'>
+    <section class='panel cell' id='cellKPI'>
+      <div class='cell-title'>Özet Göstergeler</div>
+      <div id='kpiContainer'></div>
+    </section>
+    <section class='panel cell' id='cellLine'>
+      <div class='cell-title'>Yıllık Trend</div>
+      <svg id='lineChart'></svg>
+      <div class='tip' id='lineTip'></div>
+    </section>
+    <section class='panel cell' id='cellBar'>
+      <div class='cell-title'>Tür Karşılaştırması — <span id='barYearLabel'>1992</span></div>
+      <svg id='barChart'></svg>
+      <div class='tip' id='barTip'></div>
+    </section>
+    <section class='panel cell' id='cellHeatmap'>
+      <div class='cell-title'>Genel Bakış</div>
+      <svg id='heatmapChart'></svg>
+      <div class='tip' id='heatTip'></div>
+    </section>
+  </div>
+</main>
+
+<script>
+// ===========================
+// A. DATA
+// ===========================
+const PAY={"types":["Özel Eğitim Anaokulu","Rehberlik Araştırma Merkezi","İlköğretim Okulu (Görme Engelliler)","Özel Eğitim Meslek Okulu (Görme Engelliler)","İlköğretim Okulu (İşitme Engelliler)","Özel Eğitim Meslek Lisesi(İşitme Engelliler)","İlköğretim Okulu (Bedensel Engelliler)","Özel Eğitim Meslek Lisesi(Bedensel Engelliler)","İlköğretim Okulu (Hafif Düzey Zihinsel Engelliler)","Özel Eğitim Meslek Okulu (Zihinsel Engelliler)","Özel Eğitim Uygulama Okulu (l-ll. Kademe)","Özel Eğitim Uygulama Okulu ( III. Kademe)"],"data":{"Özel Eğitim Anaokulu":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[0,0,0,0,0,0,0,0,0,1,6,10,16,22,28,38,43,67,112,137,334,360,308,272,272]},"Rehberlik Araştırma Merkezi":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[0,128,140,160,176,190,198,204,211,214,219,224,228,228,233,238,238,246,254,274,292,297,300,300,301]},"İlköğretim Okulu (Görme Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[9,15,15,16,16,16,16,15,16,16,32,32,32,34,34,34,34,36,36,37,36,36,36,35,35]},"Özel Eğitim Meslek Okulu (Görme Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]},"İlköğretim Okulu (İşitme Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[32,46,50,49,49,48,48,49,49,48,90,88,90,88,85,73,66,64,62,65,64,64,62,62,62]},"Özel Eğitim Meslek Lisesi(İşitme Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[8,13,14,14,15,15,16,17,19,20,19,18,19,21,21,21,20,20,20,20,20,21,22,20,20]},"İlköğretim Okulu (Bedensel Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[2,4,4,4,5,4,3,3,3,3,6,6,6,6,6,6,6,4,4,4,4,4,4,4,4]},"Özel Eğitim Meslek Lisesi(Bedensel Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[0,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1]},"İlköğretim Okulu (Hafif Düzey Zihinsel Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[11,37,40,44,49,50,50,55,53,51,104,99,97,92,79,76,72,73,72,71,68,68,64,65,65]},"Özel Eğitim Meslek Okulu (Zihinsel Engelliler)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[0,14,16,16,16,16,19,21,27,38,96,111,122,130,138,148,146,166,182,189,190,188,191,197,197]},"Özel Eğitim Uygulama Okulu (l-ll. Kademe)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[10,104,111,123,133,143,150,161,180,194,424,477,502,520,546,616,630,666,696,721,768,804,859,895,893]},"Özel Eğitim Uygulama Okulu ( III. Kademe)":{"years":[1992,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"values":[0,4,4,4,4,4,4,5,6,7,166,193,206,214,228,258,267,278,287,294,304,319,334,346,346]}}};
+
+// ===========================
+// B. PALETTES
+// ===========================
+const PALETTES={
+  lacivert:{
+    name:'Lacivert',
+    line:'#4a90d9', lineLight:'#6ab0ff', barActive:'#4a90d9', barPassive:'rgba(74,144,217,.3)',
+    marker:'#fff', markerStroke:'#e04050', gradTop:'#4a90d9',
+    heading:'#6ab0ff', badge:'rgba(224,64,80,.15)', badgeBorder:'rgba(224,64,80,.35)', badgeText:'#ff8a95',
+    heatmap:t=>{const c=d3.scaleLinear().domain([0,.35,.65,1]).range(['#0f2440','#1a3c6e','#e04050','#ff8a95'])(t);return c;},
+    swatches:['#0f2440','#1a3c6e','#4a90d9','#e04050','#ff8a95']
+  },
+  turuncu:{
+    name:'Turuncu',
+    line:'#f0883e', lineLight:'#f4a261', barActive:'#f0883e', barPassive:'rgba(240,136,62,.3)',
+    marker:'#fff', markerStroke:'#d4622a', gradTop:'#f0883e',
+    heading:'#f4a261', badge:'rgba(240,136,62,.12)', badgeBorder:'rgba(240,136,62,.25)', badgeText:'#f4a261',
+    heatmap:d3.interpolateYlOrRd,
+    swatches:['#3d1a00','#a04e18','#f0883e','#f4a261','#ffd1a0']
+  },
+  yesil:{
+    name:'Yeşil',
+    line:'#3fb950', lineLight:'#56d364', barActive:'#3fb950', barPassive:'rgba(63,185,80,.3)',
+    marker:'#fff', markerStroke:'#2ea043', gradTop:'#3fb950',
+    heading:'#56d364', badge:'rgba(63,185,80,.12)', badgeBorder:'rgba(63,185,80,.25)', badgeText:'#7ee787',
+    heatmap:d3.interpolateYlGn,
+    swatches:['#0d3117','#1a6334','#3fb950','#56d364','#aff5b4']
+  }
+};
+
+// ===========================
+// C. DOM REFS
+// ===========================
+const $=id=>document.getElementById(id);
+const selTur=$('selTur'), btnToggle=$('btnToggleAnim'), animPanel=$('animPanel');
+const btnPlay=$('btnPlay'), btnPrev=$('btnPrev'), btnNext=$('btnNext');
+const loopEl=$('loop'), yearBadge=$('yearBadge'), speedBtns=$('speedBtns');
+let animSpeed=1;
+const barYearLabel=$('barYearLabel');
+const btnPalette=$('btnPalette'), palDropdown=$('palDropdown'), palPreview=$('palPreview');
+const btnTheme=$('btnTheme'), themeIcon=$('themeIcon');
+
+const svgLine=d3.select('#lineChart'), svgBar=d3.select('#barChart'), svgHeat=d3.select('#heatmapChart');
+const lineTip=d3.select('#lineTip'), barTip=d3.select('#barTip'), heatTip=d3.select('#heatTip');
+
+// ===========================
+// D. STATE
+// ===========================
+const S={type:PAY.types[0], yi:0, playing:false, timer:null, palette:'lacivert', theme:'dark'};
+function P(){return PALETTES[S.palette];}
+function isDark(){return S.theme==='dark';}
+function themeGrid(){return isDark()?'rgba(255,255,255,.06)':'rgba(0,0,0,.1)';}
+function themeAxis(){return isDark()?'rgba(255,255,255,.15)':'rgba(0,0,0,.3)';}
+function themeMuted(){return isDark()?'#8b949e':'#3d444d';}
+function themeZero(){return isDark()?'rgba(255,255,255,.02)':'rgba(0,0,0,.04)';}
+function themeBg(){return isDark()?'#0d1117':'#f0f2f5';}
+
+// ===========================
+// E. UTILS
+// ===========================
+function fmtInt(x){return x==null?'—':d3.format(',')(Math.round(x)).replace(/,/g,'.');}
+function trunc(s,n){return s.length>n?s.slice(0,n-1)+'…':s;}
+function getObj(){return PAY.data[S.type];}
+function getCross(yi){
+  return PAY.types.map(t=>{const o=PAY.data[t];return{type:t,value:o.values[yi]};}).sort((a,b)=>b.value-a.value);
+}
+
+// ===========================
+// F. PALETTE PICKER
+// ===========================
+function buildPalettePicker(){
+  palDropdown.innerHTML='';
+  Object.entries(PALETTES).forEach(([key,pal])=>{
+    const opt=document.createElement('div');
+    opt.className='palette-option'+(key===S.palette?' active':'');
+    opt.innerHTML=`<div class="pal-swatches">${pal.swatches.map(c=>`<span style="background:${c}"></span>`).join('')}</div><span class="pal-name">${pal.name}</span>`;
+    opt.addEventListener('click',()=>{
+      S.palette=key;
+      palDropdown.classList.remove('open');
+      applyPalette();
+      fullUpdate();
+    });
+    palDropdown.appendChild(opt);
+  });
+  updatePalettePreview();
+}
+
+function updatePalettePreview(){
+  const pal=P();
+  palPreview.innerHTML=pal.swatches.slice(1,4).map(c=>`<span style="background:${c}"></span>`).join('');
+}
+
+function applyPalette(){
+  const pal=P();
+  document.querySelector('h1').style.color=pal.heading;
+  yearBadge.style.background=pal.badge;
+  yearBadge.style.borderColor=pal.badgeBorder;
+  yearBadge.style.color=pal.badgeText;
+  updatePalettePreview();
+  // Update active states in dropdown
+  palDropdown.querySelectorAll('.palette-option').forEach((el,i)=>{
+    el.classList.toggle('active',Object.keys(PALETTES)[i]===S.palette);
+  });
+}
+
+btnPalette.addEventListener('click',(e)=>{
+  e.stopPropagation();
+  animPanel.classList.remove('open');btnToggle.classList.remove('active');
+  palDropdown.classList.toggle('open');
+});
+document.addEventListener('click',(e)=>{
+  if(!e.target.closest('#palettePicker'))palDropdown.classList.remove('open');
+  if(!e.target.closest('#animPicker'))animPanel.classList.remove('open'),btnToggle.classList.remove('active');
+});
+
+// ===========================
+// G. THEME
+// ===========================
+function applyTheme(){
+  document.body.className=S.theme;
+  themeIcon.textContent=isDark()?'☀':'☾';
+}
+btnTheme.addEventListener('click',()=>{
+  S.theme=isDark()?'light':'dark';
+  applyTheme();
+  fullUpdate();
+});
+applyTheme();
+
+// ===========================
+// H. CONTROLS
+// ===========================
+PAY.types.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;selTur.appendChild(o);});
+selTur.value=S.type;
+
+btnToggle.addEventListener('click',(e)=>{
+  e.stopPropagation();
+  palDropdown.classList.remove('open');
+  const open=animPanel.classList.toggle('open');
+  btnToggle.classList.toggle('active',open);
+});
+
+speedBtns.addEventListener('click',(e)=>{
+  const btn=e.target.closest('button[data-speed]');
+  if(!btn)return;
+  animSpeed=parseFloat(btn.dataset.speed);
+  speedBtns.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b===btn));
+});
+
+selTur.addEventListener('change',()=>{S.type=selTur.value;pause();S.yi=0;fullUpdate();});
+
+btnPlay.addEventListener('click',()=>S.playing?pause():play());
+btnPrev.addEventListener('click',()=>{pause();step(-1);});
+btnNext.addEventListener('click',()=>{pause();step(1);});
+
+function play(){S.playing=true;btnPlay.textContent='⏸ Duraklat';tick();}
+function pause(){S.playing=false;btnPlay.textContent='▶ Oynat';if(S.timer){clearTimeout(S.timer);S.timer=null;}}
+function tick(){
+  if(!S.playing)return;
+  updateActive(S.yi);
+  S.yi++;
+  if(S.yi>=getObj().years.length){if(loopEl.checked){S.yi=0;}else{pause();return;}}
+  S.timer=setTimeout(tick,900/animSpeed);
+}
+function step(d){
+  const len=getObj().years.length;
+  S.yi=Math.max(0,Math.min(len-1,S.yi+d));
+  updateActive(S.yi);
+}
+
+// ===========================
+// H. CHART MODULES
+// ===========================
+
+// ----- I1. KPI -----
+function renderKPI(){
+  const pal=P();
+  const o=getObj(),v=o.values,y=o.years,i=S.yi,val=v[i],year=y[i];
+  let deltaHtml='<span class="kpi-flat">—</span>';
+  if(i>0&&v[i-1]>0){
+    const pct=((val-v[i-1])/v[i-1]*100);
+    const cls=pct>0?'kpi-up':pct<0?'kpi-down':'kpi-flat';
+    const arrow=pct>0?'↑':pct<0?'↓':'→';
+    deltaHtml=`<span class="${cls}">${pct>0?'+':''}${pct.toFixed(1)}% ${arrow}</span>`;
+  }
+  const nz=v.map((val,j)=>({v:val,y:y[j]})).filter(d=>d.v>0);
+  const mx=nz.length?nz.reduce((a,b)=>a.v>b.v?a:b):{v:0,y:'—'};
+  const mn=nz.length?nz.reduce((a,b)=>a.v<b.v?a:b):{v:0,y:'—'};
+
+  $('kpiContainer').innerHTML=`
+    <div class="kpi-card">
+      <div class="kpi-label">${year} Yılı</div>
+      <div class="kpi-value" style="color:${pal.lineLight}">${fmtInt(val)}</div>
+      <div class="kpi-sub">kurum sayısı</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Yıllık Değişim</div>
+      <div class="kpi-value">${deltaHtml}</div>
+      <div class="kpi-sub">${i>0?y[i-1]+' → '+year:''}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">En Yüksek</div>
+      <div class="kpi-value">${fmtInt(mx.v)}</div>
+      <div class="kpi-sub">${mx.y} yılında</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">En Düşük (>0)</div>
+      <div class="kpi-value">${fmtInt(mn.v)}</div>
+      <div class="kpi-sub">${mn.y} yılında</div>
+    </div>`;
+}
+
+// ----- I2. LINE CHART -----
+let lineScales={};
+function renderLineChart(){
+  const pal=P(), gc=themeGrid(), ac=themeAxis();
+  svgLine.selectAll('*').remove();
+  const o=getObj(),years=o.years,values=o.values;
+  const rect=$('cellLine').getBoundingClientRect();
+  const W=rect.width-32, H=rect.height-56;
+  if(W<50||H<50)return;
+  svgLine.attr('viewBox',`0 0 ${W} ${H}`);
+
+  const m={t:18,r:16,b:34,l:48};
+  const xS=d3.scaleLinear().domain([d3.min(years),d3.max(years)]).range([m.l,W-m.r]);
+  const yS=d3.scaleLinear().domain([0,d3.max(values)*1.08]).nice().range([H-m.b,m.t]);
+  lineScales={xS,yS,years,values,W,H,m};
+
+  svgLine.append('g').selectAll('line').data(yS.ticks(5)).join('line')
+    .attr('x1',m.l).attr('x2',W-m.r).attr('y1',d=>yS(d)).attr('y2',d=>yS(d))
+    .attr('stroke',gc).attr('stroke-dasharray','3,3');
+
+  const xTicks=years.filter((_,i)=>i%3===0||i===years.length-1);
+  svgLine.append('g').attr('transform',`translate(0,${H-m.b})`).call(
+    d3.axisBottom(xS).tickValues(xTicks).tickFormat(d3.format('d')).tickSize(4)
+  ).call(g=>{g.select('.domain').attr('stroke',ac);g.selectAll('text').attr('fill',themeMuted()).attr('font-size',10);g.selectAll('line').attr('stroke',ac);});
+
+  svgLine.append('g').attr('transform',`translate(${m.l},0)`).call(
+    d3.axisLeft(yS).ticks(5).tickSize(4)
+  ).call(g=>{g.select('.domain').attr('stroke',ac);g.selectAll('text').attr('fill',themeMuted()).attr('font-size',10);g.selectAll('line').attr('stroke',ac);});
+
+  const defs=svgLine.append('defs');
+  const grad=defs.append('linearGradient').attr('id','lineGrad').attr('x1',0).attr('y1',0).attr('x2',0).attr('y2',1);
+  grad.append('stop').attr('offset','0%').attr('stop-color',pal.gradTop).attr('stop-opacity',.18);
+  grad.append('stop').attr('offset','100%').attr('stop-color',pal.gradTop).attr('stop-opacity',.01);
+
+  const area=d3.area().x((_,i)=>xS(years[i])).y0(H-m.b).y1(d=>yS(d)).curve(d3.curveMonotoneX);
+  svgLine.append('path').datum(values).attr('fill','url(#lineGrad)').attr('d',area);
+
+  const line=d3.line().x((_,i)=>xS(years[i])).y(d=>yS(d)).curve(d3.curveMonotoneX);
+  const path=svgLine.append('path').datum(values).attr('fill','none').attr('stroke',pal.line).attr('stroke-width',2.2).attr('d',line);
+  const totalLen=path.node().getTotalLength();
+  path.attr('stroke-dasharray',totalLen).attr('stroke-dashoffset',totalLen).transition().duration(1000).ease(d3.easeQuadOut).attr('stroke-dashoffset',0);
+
+  svgLine.append('g').selectAll('circle').data(values).join('circle')
+    .attr('cx',(_,i)=>xS(years[i])).attr('cy',d=>yS(d)).attr('r',3).attr('fill',pal.line).attr('stroke',themeBg()).attr('stroke-width',1)
+    .style('cursor','pointer')
+    .on('click',(ev,d)=>{const idx=values.indexOf(d);pause();S.yi=idx;updateActive(idx);})
+    .on('mousemove',(ev,d)=>{
+      const idx=values.indexOf(d);
+      const [mx,my]=d3.pointer(ev,$('cellLine'));
+      lineTip.html(`<b>${years[idx]}</b><br>Değer: ${fmtInt(d)}`).style('left',(mx+14)+'px').style('top',(my-10)+'px').style('opacity',1);
+    })
+    .on('mouseleave',()=>lineTip.style('opacity',0));
+
+  svgLine.append('circle').attr('class','line-marker').attr('r',5.5)
+    .attr('fill',pal.marker).attr('stroke',pal.markerStroke).attr('stroke-width',2.5)
+    .attr('cx',xS(years[S.yi])).attr('cy',yS(values[S.yi]));
+}
+
+function updateLineMarker(i){
+  const{xS,yS,years,values}=lineScales;
+  if(!xS)return;
+  svgLine.select('.line-marker').transition().duration(320).ease(d3.easeCubicOut)
+    .attr('cx',xS(years[i])).attr('cy',yS(values[i]));
+}
+
+// ----- I3. BAR CHART -----
+let barScales={};
+function renderBarChart(){
+  const pal=P(), gc=themeGrid(), ac=themeAxis();
+  svgBar.selectAll('*').remove();
+  const rect=$('cellBar').getBoundingClientRect();
+  const W=rect.width-32, H=rect.height-56;
+  if(W<50||H<50)return;
+  svgBar.attr('viewBox',`0 0 ${W} ${H}`);
+
+  const cross=getCross(S.yi);
+  const o=getObj(),year=o.years[S.yi];
+  barYearLabel.textContent=year;
+
+  const m={t:10,r:44,b:28,l:180};
+  const xS=d3.scaleLinear().domain([0,d3.max(cross,d=>d.value)||1]).nice().range([m.l,W-m.r]);
+  const yS=d3.scaleBand().domain(cross.map(d=>d.type)).range([m.t,H-m.b]).padding(.18);
+  barScales={xS,yS,W,H,m};
+
+  svgBar.append('g').selectAll('line').data(xS.ticks(5)).join('line')
+    .attr('x1',d=>xS(d)).attr('x2',d=>xS(d)).attr('y1',m.t).attr('y2',H-m.b)
+    .attr('stroke',gc).attr('stroke-dasharray','3,3');
+
+  svgBar.append('g').attr('class','bar-xaxis').attr('transform',`translate(0,${H-m.b})`).call(
+    d3.axisBottom(xS).ticks(5).tickSize(3)
+  ).call(g=>{g.select('.domain').attr('stroke',ac);g.selectAll('text').attr('fill',themeMuted()).attr('font-size',10);g.selectAll('line').attr('stroke',ac);});
+
+  // Bars
+  svgBar.append('g').attr('class','bars').selectAll('rect').data(cross,d=>d.type).join('rect')
+    .attr('x',m.l).attr('y',d=>yS(d.type)).attr('height',yS.bandwidth())
+    .attr('fill',d=>d.type===S.type?pal.barActive:pal.barPassive)
+    .attr('rx',3).attr('width',0).style('cursor','pointer')
+    .on('click',(_,d)=>{S.type=d.type;selTur.value=d.type;pause();fullUpdate();})
+    .on('mousemove',(ev,d)=>{
+      const [mx,my]=d3.pointer(ev,$('cellBar'));
+      barTip.html(`<b>${d.type}</b><br>Değer: ${fmtInt(d.value)}`).style('left',(mx+14)+'px').style('top',(my-10)+'px').style('opacity',1);
+    })
+    .on('mouseleave',()=>barTip.style('opacity',0))
+    .transition().duration(700).ease(d3.easeCubicOut).attr('width',d=>Math.max(0,xS(d.value)-m.l));
+
+  // Type labels
+  svgBar.append('g').attr('class','bar-labels').selectAll('text').data(cross,d=>d.type).join('text')
+    .attr('x',m.l-6).attr('y',d=>yS(d.type)+yS.bandwidth()/2)
+    .attr('text-anchor','end').attr('dominant-baseline','middle')
+    .attr('fill',d=>d.type===S.type?'var(--fg)':'var(--muted)').attr('font-size',10).attr('font-weight',d=>d.type===S.type?700:400)
+    .text(d=>trunc(d.type,28));
+
+  // Value labels
+  svgBar.append('g').attr('class','bar-vals').selectAll('text').data(cross,d=>d.type).join('text')
+    .attr('x',d=>xS(d.value)+6).attr('y',d=>yS(d.type)+yS.bandwidth()/2)
+    .attr('dominant-baseline','middle').attr('fill','var(--fg)').attr('font-size',10).attr('font-weight',600)
+    .text(d=>fmtInt(d.value));
+}
+
+function updateBarData(i){
+  const pal=P();
+  const o=getObj(),year=o.years[i];
+  barYearLabel.textContent=year;
+  const cross=getCross(i);
+  const{W,H,m}=barScales;
+  if(!W)return;
+
+  const xS=d3.scaleLinear().domain([0,d3.max(cross,d=>d.value)||1]).nice().range([m.l,W-m.r]);
+  const yS=d3.scaleBand().domain(cross.map(d=>d.type)).range([m.t,H-m.b]).padding(.18);
+  barScales.xS=xS;barScales.yS=yS;
+
+  const t=d3.transition().duration(380).ease(d3.easeCubicOut);
+
+  svgBar.select('.bars').selectAll('rect').data(cross,d=>d.type)
+    .transition(t).attr('y',d=>yS(d.type)).attr('width',d=>Math.max(0,xS(d.value)-m.l))
+    .attr('fill',d=>d.type===S.type?pal.barActive:pal.barPassive);
+
+  svgBar.select('.bar-labels').selectAll('text').data(cross,d=>d.type)
+    .transition(t).attr('y',d=>yS(d.type)+yS.bandwidth()/2)
+    .attr('fill',d=>d.type===S.type?'var(--fg)':'var(--muted)').attr('font-weight',d=>d.type===S.type?700:400);
+
+  svgBar.select('.bar-vals').selectAll('text').data(cross,d=>d.type)
+    .transition(t).attr('x',d=>xS(d.value)+6).attr('y',d=>yS(d.type)+yS.bandwidth()/2)
+    .text(d=>fmtInt(d.value));
+
+  svgBar.select('.bar-xaxis').transition(t).call(d3.axisBottom(xS).ticks(5).tickSize(3));
+}
+
+// ----- I4. HEATMAP -----
+let heatScales={};
+function renderHeatmap(){
+  const pal=P(), ac=themeAxis(), mc=themeMuted(), zc=themeZero();
+  svgHeat.selectAll('*').remove();
+  const rect=$('cellHeatmap').getBoundingClientRect();
+  const W=rect.width-32, H=rect.height-56;
+  if(W<50||H<50)return;
+  svgHeat.attr('viewBox',`0 0 ${W} ${H}`);
+
+  const allYears=PAY.data[PAY.types[0]].years;
+  const types=PAY.types;
+  const globalMax=d3.max(types,t=>d3.max(PAY.data[t].values));
+
+  const m={t:10,r:16,b:50,l:180};
+  const xS=d3.scaleBand().domain(allYears).range([m.l,W-m.r]).padding(.06);
+  const yS=d3.scaleBand().domain(types).range([m.t,H-m.b]).padding(.06);
+  const colorS=d3.scaleSequentialSqrt(pal.heatmap).domain([0,globalMax]);
+  heatScales={xS,yS,colorS,allYears,types,W,H,m};
+
+  const cells=[];
+  types.forEach(t=>{const o=PAY.data[t];o.years.forEach((y,i)=>{cells.push({type:t,year:y,value:o.values[i]});});});
+
+  svgHeat.append('g').attr('class','heat-cells').selectAll('rect').data(cells).join('rect')
+    .attr('x',d=>xS(d.year)).attr('y',d=>yS(d.type))
+    .attr('width',xS.bandwidth()).attr('height',yS.bandwidth())
+    .attr('fill',d=>d.value===0?zc:colorS(d.value))
+    .attr('rx',2).style('cursor','pointer')
+    .on('click',(_,d)=>{
+      S.type=d.type;selTur.value=d.type;
+      const yi=allYears.indexOf(d.year);S.yi=yi>=0?yi:0;
+      pause();fullUpdate();
+    })
+    .on('mousemove',(ev,d)=>{
+      const [mx,my]=d3.pointer(ev,$('cellHeatmap'));
+      heatTip.html(`<b>${trunc(d.type,35)}</b><br>${d.year}: ${fmtInt(d.value)}`).style('left',(mx+14)+'px').style('top',(my-10)+'px').style('opacity',1);
+    })
+    .on('mouseleave',()=>heatTip.style('opacity',0));
+
+  const xTicks=allYears.filter((_,i)=>i%3===0||i===allYears.length-1);
+  svgHeat.append('g').attr('transform',`translate(0,${H-m.b})`).call(
+    d3.axisBottom(xS).tickValues(xTicks).tickSize(3)
+  ).call(g=>{
+    g.select('.domain').attr('stroke',ac);
+    g.selectAll('text').attr('fill',mc).attr('font-size',9).attr('transform','rotate(-40)').attr('text-anchor','end').attr('dx','-4').attr('dy','2');
+    g.selectAll('line').attr('stroke',ac);
+  });
+
+  svgHeat.append('g').attr('transform',`translate(${m.l},0)`).call(
+    d3.axisLeft(yS).tickSize(0)
+  ).call(g=>{g.select('.domain').remove();g.selectAll('text').attr('fill',mc).attr('font-size',9).text(d=>trunc(d,28));});
+
+  const hlStroke=isDark()?'#fff':'#000';
+  svgHeat.append('rect').attr('class','heat-year-hl')
+    .attr('x',xS(allYears[S.yi])-1).attr('y',m.t).attr('width',xS.bandwidth()+2).attr('height',H-m.b-m.t)
+    .attr('fill','none').attr('stroke',hlStroke).attr('stroke-width',1.5).attr('stroke-opacity',.5).attr('rx',2);
+
+  svgHeat.append('rect').attr('class','heat-type-hl')
+    .attr('x',m.l).attr('y',yS(S.type)-1).attr('width',W-m.r-m.l).attr('height',yS.bandwidth()+2)
+    .attr('fill','none').attr('stroke',pal.line).attr('stroke-width',1.5).attr('stroke-opacity',.4).attr('rx',2);
+
+  const lw=120,lh=8,lx=W-m.r-lw,ly=H-12;
+  const legendScale=d3.scaleLinear().domain([0,globalMax]).range([0,lw]);
+  const lg=svgHeat.append('g').attr('transform',`translate(${lx},${ly})`);
+  const lgDefs=svgHeat.append('defs');
+  const lgGrad=lgDefs.append('linearGradient').attr('id','heatLegGrad').attr('x1',0).attr('x2',1).attr('y1',0).attr('y2',0);
+  [0,.25,.5,.75,1].forEach(t=>{lgGrad.append('stop').attr('offset',t*100+'%').attr('stop-color',colorS(t*globalMax));});
+  lg.append('rect').attr('width',lw).attr('height',lh).attr('rx',2).attr('fill','url(#heatLegGrad)');
+  lg.append('g').attr('transform',`translate(0,${lh})`).call(d3.axisBottom(legendScale).ticks(3).tickSize(3)).call(g=>{
+    g.select('.domain').remove();g.selectAll('text').attr('fill',mc).attr('font-size',8);g.selectAll('line').attr('stroke',mc);
+  });
+}
+
+function updateHeatmapHighlight(i){
+  const{xS,yS,allYears}=heatScales;
+  if(!xS)return;
+  svgHeat.select('.heat-year-hl').transition().duration(300).attr('x',xS(allYears[i])-1);
+  svgHeat.select('.heat-type-hl').transition().duration(300).attr('y',yS(S.type)-1);
+}
+
+// ===========================
+// I. UPDATE SYSTEM
+// ===========================
+function fullUpdate(){
+  applyPalette();
+  renderKPI();
+  renderLineChart();
+  renderBarChart();
+  renderHeatmap();
+  updateYearBadge();
+}
+
+function updateActive(i){
+  S.yi=i;
+  renderKPI();
+  updateLineMarker(i);
+  updateBarData(i);
+  updateHeatmapHighlight(i);
+  updateYearBadge();
+}
+
+function updateYearBadge(){
+  const o=getObj();
+  yearBadge.textContent=o.years[S.yi];
+}
+
+// ===========================
+// J. INIT
+// ===========================
+buildPalettePicker();
+let resizeTimer;
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(fullUpdate,250);});
+fullUpdate();
+</script>
+</body>
+</html>
